@@ -627,6 +627,8 @@ int Bgetpagesize(void)
         SYSTEM_INFO system_info;
         GetSystemInfo(&system_info);
         pageSize = system_info.dwPageSize;
+#elif defined __amigaos__
+        pageSize = 4096;  // libnix's sysconf() knows no page size (the MMU's is 4 KB)
 #else
         pageSize = sysconf(_SC_PAGESIZE);
 #endif

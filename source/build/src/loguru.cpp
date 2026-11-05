@@ -2160,27 +2160,36 @@ namespace loguru
 		sig_action.sa_sigaction = &signal_handler;
 #endif
 
+#ifdef __amigaos__
+		// libnix's signal() knows only some signals (SIGBUS and others fail):
+		// each handler is installed where it can be, and a refusal is no
+		// reason to stop the game.
+		#define LOGURU_SIGACTION_CHECK(cond, ...) do { if (!(cond)) VLOG_F(g_internal_verbosity, __VA_ARGS__); } while (0)
+#else
+		#define LOGURU_SIGACTION_CHECK CHECK_F
+#endif
 		if (signal_options.sigabrt) {
-			CHECK_F(sigaction(SIGABRT, &sig_action, NULL) != -1, "Failed to install handler for SIGABRT");
+			LOGURU_SIGACTION_CHECK(sigaction(SIGABRT, &sig_action, NULL) != -1, "Failed to install handler for SIGABRT");
 		}
 		if (signal_options.sigbus) {
-			CHECK_F(sigaction(SIGBUS, &sig_action, NULL) != -1, "Failed to install handler for SIGBUS");
+			LOGURU_SIGACTION_CHECK(sigaction(SIGBUS, &sig_action, NULL) != -1, "Failed to install handler for SIGBUS");
 		}
 		if (signal_options.sigfpe) {
-			CHECK_F(sigaction(SIGFPE, &sig_action, NULL) != -1, "Failed to install handler for SIGFPE");
+			LOGURU_SIGACTION_CHECK(sigaction(SIGFPE, &sig_action, NULL) != -1, "Failed to install handler for SIGFPE");
 		}
 		if (signal_options.sigill) {
-			CHECK_F(sigaction(SIGILL, &sig_action, NULL) != -1, "Failed to install handler for SIGILL");
+			LOGURU_SIGACTION_CHECK(sigaction(SIGILL, &sig_action, NULL) != -1, "Failed to install handler for SIGILL");
 		}
 		if (signal_options.sigint) {
-			CHECK_F(sigaction(SIGINT, &sig_action, NULL) != -1, "Failed to install handler for SIGINT");
+			LOGURU_SIGACTION_CHECK(sigaction(SIGINT, &sig_action, NULL) != -1, "Failed to install handler for SIGINT");
 		}
 		if (signal_options.sigsegv) {
-			CHECK_F(sigaction(SIGSEGV, &sig_action, NULL) != -1, "Failed to install handler for SIGSEGV");
+			LOGURU_SIGACTION_CHECK(sigaction(SIGSEGV, &sig_action, NULL) != -1, "Failed to install handler for SIGSEGV");
 		}
 		if (signal_options.sigterm) {
-			CHECK_F(sigaction(SIGTERM, &sig_action, NULL) != -1, "Failed to install handler for SIGTERM");
+			LOGURU_SIGACTION_CHECK(sigaction(SIGTERM, &sig_action, NULL) != -1, "Failed to install handler for SIGTERM");
 		}
+		#undef LOGURU_SIGACTION_CHECK
 	}
 } // namespace loguru
 #endif // _WIN32

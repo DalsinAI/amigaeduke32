@@ -113,7 +113,9 @@ The Amiga's own parts, in amiga/:
 - amiga_atomic.c: GCC's __atomic_* calls (the 68k compiler will not use
   CAS on the Amiga), each done between Forbid() and Permit().
 - amiga_sys.c: the machine's memory size (AvailMem), sigaction() on libnix's
-  signal(), and the arguments of a Workbench start (the icon's tool types).
+  signal(), the arguments of a Workbench start (the icon's tool types), and
+  an Intuition requester for EDuke32's message boxes (such as "Required game
+  data was not found"), which may come after SDL_Quit().
 - pthread_stubs.c: one thread (libasync is built, never started; loguru
   names the thread). net_stubs.c and include/: socket calls that fail, so
   that enet.h and the engine's mmulti.cpp build with no TCP/IP.
@@ -140,7 +142,9 @@ Changes to upstream's files, each marked __amigaos__ or B_BIG_ENDIAN:
   16 MB tile cache (upstream: 96 MB).
 - timer.cpp: the time from SDL's performance counter (libnix has no
   clock_gettime()). sdlayer.h: idle() on SDL_Delay() (no nanosleep()).
-- loguru.cpp: sigaction with sa_handler (libnix has no sa_sigaction).
+- loguru.cpp: sigaction with sa_handler (libnix has no sa_sigaction), and a
+  crash handler libnix refuses (SIGBUS, ...) is skipped, not fatal.
+  compat.cpp: a 4 KB page size (libnix's sysconf() has none).
   xxhash.h: alignment at most 8 (the hunk format's limit). libasync.h:
   EDuke32's aligned allocator (no posix_memalign()). texcache.h: mio.hpp
   (memory-mapped files) only with OpenGL.

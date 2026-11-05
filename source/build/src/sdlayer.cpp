@@ -34,6 +34,7 @@
 extern "C" void amiga_screens_snapshot(void);
 // amiga/amiga_sys.c
 extern "C" void amiga_workbench_args(int *argc, char ***argv);
+extern "C" int amiga_requester(const char *title, const char *text, const char *buttons);
 extern "C" void amiga_screens_close_leftovers(void);
 #endif
 
@@ -259,6 +260,12 @@ int32_t wm_msgbox(const char *name, const char *fmt, ...)
 #elif defined GEKKO
     puts(buf);
     return 0;
+#elif defined __amigaos__
+    // An Intuition requester: SDL2.module may have no message box, and
+    // this may come after SDL_Quit(). The Shell gets the text as well.
+    puts(buf);
+    amiga_requester(name, buf, "OK");
+    return 0;
 #else
 # if defined HAVE_GTK2
     if (gtkbuild_msgbox(name, buf) >= 0)
@@ -308,6 +315,8 @@ int32_t wm_ynbox(const char *name, const char *fmt, ...)
     puts(buf);
     puts("Assuming yes...");
     return 1;
+#elif defined __amigaos__
+    return amiga_requester(name, buf, "Yes|No") == 1;
 #else
 # if defined HAVE_GTK2
     int ret = gtkbuild_ynbox(name, buf);

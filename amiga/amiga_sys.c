@@ -121,3 +121,24 @@ void amiga_workbench_args(int *argc, char ***argv)
 	*argc = n;
 	*argv = args;
 }
+
+/* wm_msgbox() and wm_ynbox(): an Intuition requester on the Workbench
+ * screen (or the default public screen). Returns the button chosen: 1
+ * for the first, ..., 0 for the last. The text goes in as an argument,
+ * so a '%' in it is not taken for a format. */
+#include <intuition/intuition.h>
+#include <proto/intuition.h>
+
+int amiga_requester(const char *title, const char *text, const char *buttons)
+{
+	struct EasyStruct es;
+	APTR args[1];
+
+	es.es_StructSize = sizeof(es);
+	es.es_Flags = 0;
+	es.es_Title = (UBYTE *)title;
+	es.es_TextFormat = (UBYTE *)"%s";
+	es.es_GadgetFormat = (UBYTE *)buttons;
+	args[0] = (APTR)text;
+	return (int)EasyRequestArgs(NULL, &es, NULL, args);
+}
