@@ -1,0 +1,146 @@
+# EDuke32 for AmigaOS 3.x, 68040/68060 + FPU, on OpenGPU's SDL 2.
+#
+#   make -f amiga/Makefile.amigaos -j2 \
+#        STOVE=/path/to/openamigagcc-16.2.0-open4 \
+#        NDK=/path/to/OpenNDK/Include_H SDL2KIT=/path/to/opengpu-sdk
+#   make -f amiga/Makefile.amigaos dist
+#
+# STOVE is GFOpenAmigaGCC 16.2.0-open4 or later. SDL2KIT is the OpenGPU
+# developer kit: libSDL2.a, the program's half of LIBS:OpenGPU/SDL2.module.
+# No other library is needed: EDuke32 carries its own Vorbis decoder
+# (minivorbis), libxmp-lite, miniz, lz4 and the OPL3 emulator.
+#
+# What upstream's GNUmakefile builds for the game (eduke32), with:
+#   RENDERTYPE=SDL SDL_TARGET=2 USE_OPENGL=0 POLYMER=0 NETCODE=0 NOASM=1
+#   STARTUP_WINDOW=0 USE_LIBVPX=0 HAVE_FLAC=0 USE_MIMALLOC=0 USE_PHYSFS=0
+# The classic (software) renderer only; no network game (and no enet), no
+# video (no libvpx), no FLAC (it needs libFLAC); Vorbis, XM/MOD/S3M/IT
+# (libxmp-lite), MIDI on the OPL3 emulator or the SF2 synth, all mixed by
+# audiolib on SDL's audio callback. ImGui is not built (it draws only on
+# OpenGL). The editor (Mapster32) and the tools are not built.
+# The Amiga's own parts are in amiga/ (see AMIGA_PORT.md); upstream's
+# sources are changed where they are marked __amigaos__ or B_BIG_ENDIAN.
+# Never more than -j2: the build machine is short of memory; gameexec.cpp,
+# gamedef.cpp and engine.cpp are best built with -j1.
+
+STOVE   ?= $(HOME)/CradleLab/toolchain/openamigagcc-16.2.0-open4-x86_64-linux
+NDK     ?= $(HOME)/CradleLab/gfopensdk/OpenNDK/Include_H
+SDL2KIT ?= /mnt/amigachrome/team2/deps/opengpu-sdk
+CC      = $(STOVE)/bin/m68k-amigaos-gcc
+CXX     = $(STOVE)/bin/m68k-amigaos-g++
+STRIP   = $(STOVE)/bin/m68k-amigaos-strip
+# The 68060 has no 64-bit MULS.L/DIVS.L: code built for the 68040 traps
+# to 68060.library on every Build engine mulscale(). CPU="-m68060 -m68881"
+# makes a build for the 68060 alone (libgcc calls instead of the traps).
+CPU     ?= -m68040 -m68881
+# -fno-tree-loop-distribute-patterns: GCC 16's loop miscompile (the kit's
+# sdl2-config gives it for GCC 16 too).
+OPT     ?= -O2 -fomit-frame-pointer -fno-tree-loop-distribute-patterns
+
+# Upstream's revision string (rev.cpp), as its Makefile makes it.
+VC_REV  := $(shell git rev-list --count HEAD 2>/dev/null)
+VC_HASH := $(shell git rev-parse --short=9 HEAD 2>/dev/null)
+
+DEFS    = -DRENDERTYPESDL=1 -DSDL_TARGET=2 -DNETCODE_DISABLE -DNOASM \
+          -DHAVE_VORBIS -DHAVE_XMP -DNDEBUG -D_REENTRANT -DEDUKE32_NO_IMGUI \
+          -DREV="r$(VC_REV)-$(VC_HASH)-amiga" \
+          -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+INC     = -Iamiga/include -Isource/build/include -Isource/mact/include \
+          -Isource/audiolib/include -Isource/libxmp-lite/include -Isource/glad/include \
+          -I$(SDL2KIT)/include/SDL2 -I$(SDL2KIT)/include
+# As upstream's Common.mak: unsigned char, no strict aliasing, no RTTI or
+# exceptions in C++, no thread-safe statics (there is one game thread).
+COMMON  = -noixemul $(OPT) $(CPU) $(DEFS) $(INC) -funsigned-char \
+          -fno-strict-aliasing -fjump-tables \
+          -fno-stack-protector -funswitch-loops -MMD -MP
+CXXFLAGS = $(COMMON) -std=gnu++14 -fno-exceptions -fno-rtti -fno-threadsafe-statics \
+           -include amiga/include/amiga_prelude.h
+CFLAGS   = $(COMMON) -std=gnu11
+XMPFLAGS = -DHAVE_ROUND -DLIBXMP_CORE_PLAYER -DLIBXMP_NO_PROWIZARD \
+           -DLIBXMP_NO_DEPACKERS -DBUILDING_STATIC -DWORDS_BIGENDIAN \
+           -Isource/libxmp-lite/include/libxmp-lite
+AMIGAWARN = -Wall -Wextra
+LDFLAGS = -noixemul $(CPU)
+LIBS    = -L$(SDL2KIT)/lib -lSDL2 -lamiga -lm
+BUILD   = build/amigaos
+OBJDIR  = $(BUILD)/obj
+DIST    = dist
+OUT     = $(DIST)/EDuke32
+PROG    = EDuke32
+
+# The engine: upstream's engine_objs with its exclusions for this build.
+ENGINE_EXCL = a-c.cpp sdlayer12.cpp sdlkeytrans.cpp startgtk.editor.cpp \
+          startwin.editor.cpp build.cpp config.cpp glbuild.cpp glsurface.cpp \
+          mdsprite.cpp polymer.cpp polymost.cpp tilepacker.cpp voxmodel.cpp \
+          winbits.cpp wiibits.cpp winlayer.cpp rawinput.cpp gtkbits.cpp \
+          dynamicgtk.cpp animvpx.cpp enet.cpp smmalloc.cpp \
+          smmalloc_generic.cpp smmalloc_tls.cpp
+ENGINE_SRC = $(filter-out $(addprefix source/build/src/,$(ENGINE_EXCL)), \
+          $(wildcard source/build/src/*.c source/build/src/*.cpp)) \
+          source/build/src/a-c.cpp
+MACT_SRC = $(wildcard source/mact/src/*.cpp)
+AUDIO_EXCL = music_external.cpp driver_directsound.cpp driver_winmm.cpp \
+          driver_alsa.cpp
+AUDIO_SRC = $(filter-out $(addprefix source/audiolib/src/,$(AUDIO_EXCL)), \
+          $(wildcard source/audiolib/src/*.cpp))
+XMP_SRC  = $(wildcard source/libxmp-lite/src/*.c)
+DUKE_EXCL = in_android.cpp m32structures.cpp mdump.cpp startgtk.game.cpp \
+          startwin.game.cpp m32common.cpp m32def.cpp m32exec.cpp m32vars.cpp \
+          astub.cpp sounds_mapster32.cpp
+DUKE_SRC = $(filter-out $(addprefix source/duke3d/src/,$(DUKE_EXCL)), \
+          $(wildcard source/duke3d/src/*.cpp))
+AMIGA_SRC = amiga/stack.c amiga/amiga_screens.c amiga/amiga_dir.c \
+          amiga/amiga_sys.c amiga/amiga_alloc.c amiga/amiga_atomic.c \
+          amiga/pthread_stubs.c amiga/net_stubs.c
+
+SRC     = $(ENGINE_SRC) $(MACT_SRC) $(AUDIO_SRC) $(XMP_SRC) $(DUKE_SRC) \
+          source/duke3d/rsrc/game_icon.c $(AMIGA_SRC)
+OBJS    = $(addprefix $(OBJDIR)/,$(addsuffix .o,$(basename $(SRC))))
+
+all: $(BUILD)/$(PROG)
+
+$(BUILD)/$(PROG): $(OBJS)
+	$(CXX) $(LDFLAGS) -o $@.debug $(OBJS) $(LIBS)
+	$(STRIP) -o $@ $@.debug
+
+# The game drawer: the program, the ReadMe, the licences, an empty
+# GameData drawer for the user's own DUKE3D.GRP, and the GlowIcons (made by
+# port_icons.py from amiga/icons/icons.json; see that file).
+ICONS   = $(wildcard amiga/icons/*.info)
+
+dist: $(BUILD)/$(PROG) AMIGA_PORT.md $(ICONS)
+	rm -rf $(OUT) $(DIST)/EDuke32.info
+	mkdir -p $(OUT)/GameData
+	cp $(BUILD)/$(PROG) $(OUT)/$(PROG)
+	cp AMIGA_PORT.md $(OUT)/ReadMe
+	cp package/common/buildlic.txt $(OUT)/buildlic.txt
+	cp package/common/gpl-2.0.txt $(OUT)/gpl-2.0.txt
+	cp amiga/icons/EDuke32.info amiga/icons/ReadMe.info \
+	   amiga/icons/buildlic.txt.info amiga/icons/gpl-2.0.txt.info \
+	   amiga/icons/GameData.info $(OUT)/
+	cp amiga/icons/EDuke32-drawer.info $(DIST)/EDuke32.info
+
+$(OBJDIR)/amiga/%.o: amiga/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(AMIGAWARN) -I$(NDK) -c -o $@ $<
+
+$(OBJDIR)/source/libxmp-lite/%.o: source/libxmp-lite/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(XMPFLAGS) -c -o $@ $<
+
+$(OBJDIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJDIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+objs: $(OBJS)
+
+-include $(OBJS:.o=.d)
+
+clean:
+	rm -rf $(BUILD) $(OUT) $(DIST)/EDuke32.info
+
+.PHONY: all dist objs clean

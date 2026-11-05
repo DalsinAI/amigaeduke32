@@ -699,7 +699,7 @@ int MIDI_PlaySong(char *song, int loopflag)
     if (_MIDI_Funcs == nullptr)
         return MIDI_NullMidiModule;
 
-    if (B_UNBUF32(song) != MIDI_HEADER_SIGNATURE)
+    if (B_LITTLE32(B_UNBUF32(song)) != MIDI_HEADER_SIGNATURE)  // the constant is "MThd" read little-endian
         return MIDI_InvalidMidiFile;
 
     _MIDI_SongPtr = song;
@@ -734,7 +734,7 @@ int MIDI_PlaySong(char *song, int loopflag)
 
     while (numtracks--)
     {
-        if (B_UNBUF32(ptr) != MIDI_TRACK_SIGNATURE)
+        if (B_LITTLE32(B_UNBUF32(ptr)) != MIDI_TRACK_SIGNATURE)
         {
             DO_FREE_AND_NULL(My_MIDI_TrackPtr);
 

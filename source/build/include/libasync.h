@@ -3470,6 +3470,9 @@ static inline void* aligned_alloc(std::size_t size, std::size_t align)
 	if (!ptr)
 		LIBASYNC_THROW(std::bad_alloc());
 	return ptr;
+#elif defined __amigaos__
+	// libnix has no posix_memalign(): EDuke32's own allocator (compat.h).
+	return Xaligned_alloc(align, size);
 #else
 	void* result;
 	if (posix_memalign(&result, align, size))
@@ -3483,6 +3486,8 @@ static inline void aligned_free(void* addr) LIBASYNC_NOEXCEPT
 {
 #ifdef _WIN32
 	_aligned_free(addr);
+#elif defined __amigaos__
+	Xaligned_free(addr);
 #else
 	free(addr);
 #endif

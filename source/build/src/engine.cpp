@@ -8676,7 +8676,7 @@ static int32_t engineLoadTables(void)
         for (i=0; i<5120; i++)
             qradarang[10239-i] = -qradarang[i];
 
-#ifdef B_LITTLE_ENDIAN
+#if B_LITTLE_ENDIAN == 1  // the CRCs are of the tables' little-endian bytes
         i = 0;
         if (Bcrc32((uint8_t *)sintable, sizeof(sintable), 0) != 0xee1e7aba)
             i |= 1;
@@ -11870,8 +11870,15 @@ static void videoAllocateBuffers(void)
         else
 # endif
         {
+#ifdef __amigaos__
+            // No scaling on the CPU: sdlayer's texture is the frame's own
+            // size and the renderer scales it to the window.
+            softsurface_initialize({ xdim, ydim },
+                                   { xdim, ydim });
+#else
             softsurface_initialize({ xdim, ydim },
                                    { xres, yres });
+#endif
         }
     }
 #endif

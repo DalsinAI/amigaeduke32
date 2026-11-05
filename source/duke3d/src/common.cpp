@@ -246,6 +246,15 @@ void G_ExtPreInit(int32_t argc,char const * const * argv)
     GetModuleFileName(NULL,g_rootDir,BMAX_PATH);
     Bcorrectfilename(g_rootDir,1);
     //buildvfs_chdir(g_rootDir);
+#elif defined __amigaos__
+    // The game's drawer: the GRPs are looked for there (and in its
+    // GameData drawer), and the configuration and the saves go there,
+    // unless -usecwd keeps the Shell's current drawer.
+    Bstrcpy(g_rootDir, "PROGDIR:");
+    if (!g_useCwd)
+        buildvfs_chdir("PROGDIR:");
+    addsearchpath("PROGDIR:");
+    addsearchpath("PROGDIR:GameData");
 #else
     buildvfs_getcwd(g_rootDir,BMAX_PATH);
     strcat(g_rootDir,"/");

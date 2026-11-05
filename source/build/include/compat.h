@@ -386,6 +386,11 @@ defined __x86_64__ || defined __amd64__ || defined _M_X64 || defined _M_IA64 || 
 # define B_LITTLE_ENDIAN 0
 # define B_BIG_ENDIAN 1
 
+#elif defined(__amigaos__) || defined(__AMIGA__)
+// The 68k Amiga: big-endian, as the PPC Macs and the Wii were.
+# define B_LITTLE_ENDIAN 0
+# define B_BIG_ENDIAN 1
+
 #elif defined(__OpenBSD__)
 # include <machine/endian.h>
 # if _BYTE_ORDER == _LITTLE_ENDIAN
@@ -1353,6 +1358,28 @@ void set_memerr_handler(void (*handlerfunc)(int32_t, int32_t, const char *, cons
 EDUKE32_NORETURN void handle_memerr(int32_t bytes);
 
 #ifdef __cplusplus
+#ifdef __amigaos__
+// No smmalloc on the Amiga: its 16 MB of buckets reserved up front are a
+// lot of a 68k machine's memory, and it needs 64-bit atomics. An exec
+// memory pool instead (amiga/amiga_alloc.c).
+#include <atomic>  // which the other headers had through smmalloc.h
+
+typedef void *sm_allocator;
+extern "C"
+{
+void *amiga_malloc(size_t size, size_t alignment);
+void *amiga_realloc(void *ptr, size_t size, size_t alignment);
+void  amiga_free(void *ptr);
+}
+# define _sm_malloc(heap, size, align) amiga_malloc((size), (align))
+# define _sm_realloc(heap, ptr, size, align) amiga_realloc((ptr), (size), (align))
+# define _sm_free(heap, ptr) amiga_free(ptr)
+
+extern sm_allocator g_sm_heap;
+
+static FORCE_INLINE void engineCreateAllocator(void) { }
+static FORCE_INLINE void engineDestroyAllocator(void) { }
+#else
 #include "smmalloc.h"
 
 extern sm_allocator g_sm_heap;
@@ -1369,6 +1396,7 @@ static FORCE_INLINE void engineDestroyAllocator(void)
     _sm_allocator_thread_cache_destroy(g_sm_heap);
     _sm_allocator_destroy(g_sm_heap);
 }
+#endif
 
 #ifdef BITNESS64
 # define ALLOC_ALIGNMENT 16

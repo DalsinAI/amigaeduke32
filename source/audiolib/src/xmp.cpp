@@ -51,6 +51,13 @@ static playbackstatus MV_GetNextXMPBlock(VoiceNode *voice)
     uint32_t const samples = mi.buffer_size / (2 * (16/8)); // since 2-channel, 16-bit is hardcoded
     // uint32_t const samples = mi.buffer_size / (voice->channels * (voice->bits / 8));
 
+#if B_BIG_ENDIAN == 1
+    // libxmp mixes in the machine's byte order; the voice mixers read
+    // little-endian samples (CONVERT_LE_SAMPLE_TO_SIGNED).
+    for (int16_t *p = (int16_t *)mi.buffer, *const end = p + (mi.buffer_size >> 1); p < end; p++)
+        *p = B_SWAP16(*p);
+#endif
+
     voice->sound    = (char const *)mi.buffer;
     voice->length   = samples << 16;
     voice->position = mi.time;
