@@ -176,7 +176,12 @@ int32_t addsearchpath_user(const char *p, int32_t user)
     for (s=srch->path; *s; s++) { }
     s--;
 
+#ifdef __amigaos__
+    // "PROGDIR:" takes no '/': "PROGDIR:/" is the drawer above it.
+    if (s<srch->path || (toupperlookup[*s] != '/' && *s != ':'))
+#else
     if (s<srch->path || toupperlookup[*s] != '/')
+#endif
         Bstrcat(srch->path, "/");
 
     searchpathhead = srch;
@@ -207,7 +212,11 @@ int32_t removesearchpath(const char *p)
     for (s=path; *s; s++) { }
     s--;
 
+#ifdef __amigaos__
+    if (s<path || (toupperlookup[*s] != '/' && *s != ':'))
+#else
     if (s<path || toupperlookup[*s] != '/')
+#endif
         Bstrcat(path, "/");
 
     Bcorrectfilename(path,0);
@@ -331,7 +340,12 @@ int32_t findfrompath(const char *fn, char **where)
 
     char *pfn = (char *)Xmalloc(allocsiz);
 
+#ifdef __amigaos__
+    // AmigaDOS has no "./": a bare name is in the current drawer.
+    strcpy(pfn, "");
+#else
     strcpy(pfn, "./");
+#endif
     strcat(pfn, ffn);
     if (buildvfs_exists(pfn))
     {
@@ -1225,7 +1239,11 @@ BUILDVFS_FIND_REC *klistpath(const char *_path, const char *mask, int32_t type)
 
         PHYSFS_freeList(rc);
 #else
+#ifdef __amigaos__
+        static const char *const CUR_DIR = "";  // the current drawer
+#else
         static const char *const CUR_DIR = "./";
+#endif
         // Adjusted for the following "autoload" dir fix - NY00123
         searchpath_t *search = NULL;
         const char *d = pathsearchmode ? _path : CUR_DIR;

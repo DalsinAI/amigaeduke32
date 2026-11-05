@@ -20,6 +20,11 @@
 #endif
 #endif
 
+#ifdef __amigaos__
+// amiga/amiga_sys.c
+extern "C" size_t amiga_sysmemsize(void);
+#endif
+
 #if defined __linux || defined EDUKE32_BSD
 #include <libgen.h>  // for dirname()
 #include <pwd.h>     // for getpwuid()
@@ -125,6 +130,10 @@ char *Bgethomedir(void)
     if (drv)
         drv[1] = '\0';
     return Xstrdup(cwd);
+#elif defined __amigaos__
+    // No home drawer: the configuration and the saves stay in the
+    // program's drawer (PROGDIR:, which G_ExtPreInit() makes current).
+    return NULL;
 #else
     char const *e;
     if ((e = getenv("HOME")) == NULL || e[0] == '\0')
@@ -223,11 +232,21 @@ int32_t Bcorrectfilename(char *filename, int32_t removefn)
     if (leadslash) *(first++) = '/';
     for (int i=0; i<ntok; i++)
     {
+#ifdef __amigaos__
+        // AmigaDOS: no '/' after a volume or assign ("PROGDIR:/x" is the
+        // parent of PROGDIR:, not a file in it).
+        if (i>0 && first[-1] != ':') *(first++) = '/';
+#else
         if (i>0) *(first++) = '/';
+#endif
         for (char *token=tokarr[i]; *token; token++)
             *(first++) = *token;
     }
+#ifdef __amigaos__
+    if (trailslash && !(first > filename && first[-1] == ':')) *(first++) = '/';
+#else
     if (trailslash) *(first++) = '/';
+#endif
     *(first++) = 0;
 
     Xfree(fn);
@@ -430,7 +449,17 @@ struct Bdirent *Breaddir(BDIR *dir)
     dirr->info.mtime = 0;
 
     char *fn = (char *)Xmalloc(Bstrlen(dirr->name) + 1 + dirr->info.namlen + 1);
+#ifdef __amigaos__
+    // AmigaDOS: "" is the current drawer, and no '/' goes after a ':' or
+    // a '/' ("Vol:/x" and "a//x" mean parent drawers).
+    {
+        size_t const l = Bstrlen(dirr->name);
+        char const c = l ? dirr->name[l-1] : ':';
+        Bsprintf(fn, (c == ':' || c == '/') ? "%s%s" : "%s/%s", dirr->name, dirr->info.name);
+    }
+#else
     Bsprintf(fn, "%s/%s", dirr->name, dirr->info.name);
+#endif
 
 #ifdef USE_PHYSFS
     PHYSFS_Stat st;
@@ -617,7 +646,9 @@ size_t Bgetsysmemsize(void)
 {
     size_t siz = UINT32_MAX;
 
-#ifdef _WIN32
+#ifdef __amigaos__
+    siz = amiga_sysmemsize();
+#elif defined _WIN32
     HMODULE lib = LoadLibrary("KERNEL32.DLL");
 
     if (lib)

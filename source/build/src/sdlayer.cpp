@@ -15,12 +15,26 @@
 #include "sdl_inc.h"
 #include "softsurface.h"
 
-#if SDL_MAJOR_VERSION >= 2
+// EDUKE32_NO_IMGUI: ImGui draws only through OpenGL; a build without it
+// (the Amiga's, amiga/Makefile.amigaos) leaves it out altogether.
+#if SDL_MAJOR_VERSION >= 2 && !defined EDUKE32_NO_IMGUI
+# define USE_IMGUI
+#endif
+
+#ifdef USE_IMGUI
 # include "imgui.h"
 # include "imgui_impl_sdl2.h"
 #ifdef USE_OPENGL
 # include "imgui_impl_opengl3.h"
 #endif
+#endif
+
+#ifdef __amigaos__
+// amiga/amiga_screens.c
+extern "C" void amiga_screens_snapshot(void);
+// amiga/amiga_sys.c
+extern "C" void amiga_workbench_args(int *argc, char ***argv);
+extern "C" void amiga_screens_close_leftovers(void);
 #endif
 
 #ifdef USE_OPENGL
@@ -93,6 +107,67 @@ static SDL_GLContext sdl_context;
 static int vsync_unsupported;
 #endif
 
+#ifdef __amigaos__
+// OpenGPU's SDL 2 gives a 24-bit window surface (SDL_PIXELFORMAT_RGB24,
+// three bytes a pixel), which softsurface cannot write. The 8-bit frame
+// goes through the palette into a 32-bit XRGB texture of the game's
+// size, which the renderer scales to the window (and converts to the
+// screen's depth) itself; sdl_surface is a plain 32-bit surface of the
+// same size, kept for its pixel format and as a fallback buffer.
+static SDL_Renderer *sdl_renderer;
+static SDL_Texture *sdl_texture;
+static vec2_t sdl_texturesize;
+
+static void sdlayer_amiga_destroyframe(void)
+{
+    if (sdl_texture)
+        SDL_DestroyTexture(sdl_texture);
+    sdl_texture = NULL;
+    sdl_texturesize = {};
+    if (sdl_renderer)
+        SDL_DestroyRenderer(sdl_renderer);
+    sdl_renderer = NULL;
+    if (sdl_surface)
+        SDL_FreeSurface(sdl_surface);
+    sdl_surface = NULL;
+}
+
+static int sdlayer_amiga_makeframe(int const x, int const y)
+{
+    if (!sdl_renderer)
+    {
+        sdl_renderer = SDL_CreateRenderer(sdl_window, -1, 0);
+        if (!sdl_renderer)
+        {
+            LOG_F(ERROR, "Unable to create a renderer: %s.", SDL_GetError());
+            return -1;
+        }
+    }
+
+    if (sdl_texture && sdl_surface && sdl_texturesize.x == x && sdl_texturesize.y == y)
+        return 0;
+
+    if (sdl_texture)
+        SDL_DestroyTexture(sdl_texture);
+    if (sdl_surface)
+        SDL_FreeSurface(sdl_surface);
+
+    sdl_texture = SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_RGB888, SDL_TEXTUREACCESS_STREAMING, x, y);
+    sdl_surface = SDL_CreateRGBSurfaceWithFormat(0, x, y, 32, SDL_PIXELFORMAT_RGB888);
+
+    if (!sdl_texture || !sdl_surface)
+    {
+        LOG_F(ERROR, "Unable to create a %dx%d frame: %s.", x, y, SDL_GetError());
+        sdl_texturesize = {};
+        return -1;
+    }
+
+    sdl_texturesize = { x, y };
+    SDL_RenderClear(sdl_renderer);
+    return 0;
+}
+#endif
+
 static int32_t vsync_renderlayer;
 int32_t maxrefreshfreq=0;
 int32_t xres=-1, yres=-1, bpp=0, fullscreen=0, bytesperline;
@@ -123,8 +198,10 @@ static SDL_Surface *loadappicon(void);
 #endif
 
 static mutex_t m_initprintf;
-#if SDL_MAJOR_VERSION >= 2
+#ifdef USE_IMGUI
 static ImGuiIO *g_ImGui_IO;
+#endif
+#if SDL_MAJOR_VERSION >= 2
 bool g_ImGuiCaptureInput = true;
 #endif
 uint8_t g_ImGuiCapturedDevices;
@@ -323,7 +400,7 @@ void wm_setapptitle(const char *name)
 //
 
 /* XXX: libexecinfo could be used on systems without gnu libc. */
-#if !defined _WIN32 && defined __GNUC__ && !defined __OpenBSD__ && !(defined __APPLE__ && defined __BIG_ENDIAN__) && !defined GEKKO && !defined EDUKE32_TOUCH_DEVICES && !defined __OPENDINGUX__
+#if !defined _WIN32 && defined __GNUC__ && !defined __OpenBSD__ && !(defined __APPLE__ && defined __BIG_ENDIAN__) && !defined GEKKO && !defined EDUKE32_TOUCH_DEVICES && !defined __OPENDINGUX__ && !defined __amigaos__
 # define PRINTSTACKONSEGV 1
 # include <execinfo.h>
 #endif
@@ -448,6 +525,11 @@ void sdlayer_sethints()
 #if defined SDL_HINT_MOUSE_RELATIVE_SCALING
     SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SCALING, "0");
 #endif
+#if defined __amigaos__ && defined SDL_HINT_THREAD_STACK_SIZE
+    // SDL's audio task runs audiolib's mixer, the Vorbis and XMP decoders
+    // and the OPL3 emulator: more than a default task's stack.
+    SDL_SetHint(SDL_HINT_THREAD_STACK_SIZE, "262144");
+#endif
 }
 
 #ifdef _WIN32
@@ -477,6 +559,11 @@ int main(int argc, char *argv[])
     argv[argc] = NULL;
 #endif
 
+#ifdef __amigaos__
+    amiga_workbench_args(&argc, &argv);
+    amiga_screens_snapshot();
+#endif
+
     engineSetupAllocator();
 
 #ifndef __ANDROID__
@@ -488,7 +575,9 @@ int main(int argc, char *argv[])
 
     engineSetupLogging(argc, argv);
 
-#if SDL_VERSION_ATLEAST(2, 0, 8)
+#if SDL_VERSION_ATLEAST(2, 0, 8) && !defined __amigaos__
+    // Not on the Amiga: SDL2.module allocates on its own tasks too (the
+    // audio one), and libnix's malloc() is the game task's alone.
     if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 8))
         SDL_SetMemoryFunctions(_xmalloc, _xcalloc, _xrealloc, _xfree);
 #endif
@@ -755,6 +844,10 @@ int32_t initsystem(void)
 #endif
 
 
+#ifdef __amigaos__
+static void destroy_window_resources();
+#endif
+
 //
 // uninitsystem() -- uninit SDL systems
 //
@@ -778,7 +871,14 @@ void uninitsystem(void)
     SDL_GL_UnloadLibrary();
 # endif
 #endif
+#ifdef __amigaos__
+    destroy_window_resources();
+#endif
     SDL_Quit();
+#ifdef __amigaos__
+    // SDL2.module (0.6) leaves the screens of a fullscreen window open.
+    amiga_screens_close_leftovers();
+#endif
 }
 
 
@@ -1312,7 +1412,7 @@ void mouseGrabInput(bool grab)
 
 void mouseLockToWindow(char a)
 {
-#if SDL_MAJOR_VERSION >= 2
+#ifdef USE_IMGUI
     if (!g_ImGui_IO || !g_ImGui_IO->WantCaptureMouse)
 #endif
     if (!(a & 2))
@@ -1325,7 +1425,7 @@ void mouseLockToWindow(char a)
 
     SDL_ShowCursor(newstate);
 
-#if SDL_MAJOR_VERSION >= 2
+#ifdef USE_IMGUI
     if (g_ImGui_IO)
     {
         if (newstate)
@@ -1412,6 +1512,24 @@ void videoGetModes(int display)
             maxy = dispmode.h;
         }
     }
+
+#ifdef __amigaos__
+    // The frame is a texture the renderer scales to whatever screen SDL
+    // opens (the display mode nearest to it), so the classic low
+    // resolutions are offered full screen whatever modes the Amiga lists.
+    {
+        static const vec2_t amigamodes[] = { { 320, 200 }, { 320, 240 }, { 400, 300 }, { 640, 400 }, { 640, 480 } };
+        for (auto const &m : amigamodes)
+        {
+            SDL_ADDMODE(m.x, m.y, 8, 1);
+            if (m.x > maxx || m.y > maxy)
+            {
+                maxx = m.x;
+                maxy = m.y;
+            }
+        }
+    }
+#endif
 
     SDL_CHECKFSMODES(maxx, maxy);
 
@@ -1520,7 +1638,7 @@ static void destroy_window_resources()
     MicroProfileGpuShutdown();
 #endif
 
-#if SDL_MAJOR_VERSION >= 2
+#ifdef USE_IMGUI
     if (g_ImGui_IO)
     {
 #ifdef USE_OPENGL
@@ -1530,9 +1648,16 @@ static void destroy_window_resources()
         ImGui::DestroyContext();
         g_ImGui_IO = NULL;
     }
+#endif
 
+#if SDL_MAJOR_VERSION >= 2
+#ifdef __amigaos__
+    sdlayer_amiga_destroyframe();
+#endif
+#ifdef USE_OPENGL
     if (sdl_context)
         SDL_GL_DeleteContext(sdl_context);
+#endif
     sdl_context = NULL;
     if (sdl_window)
         SDL_DestroyWindow(sdl_window);
@@ -1545,7 +1670,7 @@ bool g_ImGuiFrameActive;
 void engineBeginImGuiFrame(void)
 {
     Bassert(g_ImGuiFrameActive == false);
-#if SDL_MAJOR_VERSION >= 2
+#ifdef USE_IMGUI
 #ifdef USE_OPENGL
     ImGui_ImplOpenGL3_NewFrame();
 #endif
@@ -1559,8 +1684,10 @@ void engineEndImGuiInput(void)
 {
     keyFlushChars();
     keyFlushScans();
-#if SDL_MAJOR_VERSION >= 2
+#ifdef USE_IMGUI
     ImGui::GetIO().ClearInputKeys();
+#endif
+#if SDL_MAJOR_VERSION >= 2
 //    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
     SDL_StopTextInput();
 #endif
@@ -1578,7 +1705,7 @@ void engineBeginImGuiInput(void)
 
 void engineSetupImGui(void)
 {
-#if SDL_MAJOR_VERSION >= 2
+#ifdef USE_IMGUI
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     g_ImGui_IO = &ImGui::GetIO();
@@ -1791,6 +1918,12 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
     }
 
     SDL_FlushEvent(SDL_WINDOWEVENT);
+
+#ifdef __amigaos__
+    // A window kept from the last mode gets a frame of the new size.
+    if (sdlayer_amiga_makeframe(x, y))
+        return -1;
+#endif
 #endif
 
     videoFadePalette(palfadergb.r, palfadergb.g, palfadergb.b, palfadedelta);
@@ -1914,9 +2047,14 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
         if (!sdl_window)
             SDL2_VIDEO_ERR("SDL_CreateWindow");
 
+#ifdef __amigaos__
+        if (sdlayer_amiga_makeframe(x, y))
+            SDL2_VIDEO_ERR("SDL_CreateTexture");
+#else
         sdl_surface = SDL_GetWindowSurface(sdl_window);
         if (!sdl_surface)
             SDL2_VIDEO_ERR("SDL_GetWindowSurface");
+#endif
     }
 
     setvideomode_sdlcommonpost(x, y, c, fs, regrab);
@@ -2180,6 +2318,48 @@ void videoShowFrame(int32_t w)
         while (lockcount) videoEndDrawing();
     }
 
+#ifdef __amigaos__
+    // The texture is the size of the 8-bit frame (xdim x ydim, smaller
+    // than the window with r_upscalefactor): the renderer does the scaling.
+    {
+        vec2_t const res = softsurface_getBufferResolution();
+        if (res.x > 0 && sdlayer_amiga_makeframe(res.x, res.y))
+            return;
+    }
+    if (!sdl_texture)
+        return;
+
+    // Straight into the texture when its lines are the frame's width;
+    // through sdl_surface when they are not.
+    void *texpixels;
+    int texpitch;
+
+    if (SDL_LockTexture(sdl_texture, NULL, &texpixels, &texpitch) == 0)
+    {
+        if (texpitch == sdl_texturesize.x * 4)
+        {
+            softsurface_blitBuffer((uint32_t *)texpixels, 32);
+            SDL_UnlockTexture(sdl_texture);
+        }
+        else
+        {
+            SDL_UnlockTexture(sdl_texture);
+            softsurface_blitBuffer((uint32_t *)sdl_surface->pixels, 32);
+            SDL_UpdateTexture(sdl_texture, NULL, sdl_surface->pixels, sdl_surface->pitch);
+        }
+    }
+    else
+    {
+        softsurface_blitBuffer((uint32_t *)sdl_surface->pixels, 32);
+        SDL_UpdateTexture(sdl_texture, NULL, sdl_surface->pixels, sdl_surface->pitch);
+    }
+
+    SDL_RenderCopy(sdl_renderer, sdl_texture, NULL, NULL);
+    SDL_RenderPresent(sdl_renderer);
+    MicroProfileFlip();
+    return;
+#endif
+
     if (SDL_MUSTLOCK(sdl_surface)) SDL_LockSurface(sdl_surface);
     softsurface_blitBuffer((uint32_t*) sdl_surface->pixels, sdl_surface->format->BitsPerPixel);
     if (SDL_MUSTLOCK(sdl_surface)) SDL_UnlockSurface(sdl_surface);
@@ -2297,8 +2477,14 @@ int32_t videoSetGamma(void)
 extern "C" struct sdlappicon sdlappicon;
 static inline SDL_Surface *loadappicon(void)
 {
+    // The pixels are bytes R, G, B, A in that order, whatever the machine.
+#if B_BIG_ENDIAN == 1
+    SDL_Surface *surf = SDL_CreateRGBSurfaceFrom((void *)sdlappicon.pixels, sdlappicon.width, sdlappicon.height, 32,
+                                                 sdlappicon.width * 4, 0xff000000l, 0xff0000l, 0xff00l, 0xffl);
+#else
     SDL_Surface *surf = SDL_CreateRGBSurfaceFrom((void *)sdlappicon.pixels, sdlappicon.width, sdlappicon.height, 32,
                                                  sdlappicon.width * 4, 0xffl, 0xff00l, 0xff0000l, 0xff000000l);
+#endif
     return surf;
 }
 #endif
@@ -2514,6 +2700,7 @@ int32_t handleevents_pollsdl(void)
 
     g_ImGuiCapturedDevices = 0;
 
+#ifdef USE_IMGUI
     if (g_ImGui_IO)
     {
         if (g_ImGuiCaptureInput && g_ImGui_IO->WantCaptureKeyboard)
@@ -2522,9 +2709,11 @@ int32_t handleevents_pollsdl(void)
         if (g_ImGui_IO->WantCaptureMouse)
             g_ImGuiCapturedDevices |= DEV_MOUSE;
     }
+#endif
 
     while (SDL_PollEvent(&ev))
     {
+#ifdef USE_IMGUI
         if (g_ImGui_IO)
         {
             if (g_ImGui_IO->WantCaptureKeyboard && (ev.type == SDL_TEXTINPUT || ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP))
@@ -2535,6 +2724,7 @@ int32_t handleevents_pollsdl(void)
                 if (ImGui_ImplSDL2_ProcessEvent(&ev))
                     continue;
         }
+#endif
 
         switch (ev.type)
         {
@@ -2799,11 +2989,13 @@ int32_t handleevents(void)
     int32_t rv;
 
 #if SDL_VERSION_ATLEAST(2, 0, 9)
+#ifdef USE_IMGUI
     if (g_ImGuiFrameActive)
     {
         ImGui::EndFrame();
         g_ImGuiFrameActive = false;
     }
+#endif
 
     if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
     {

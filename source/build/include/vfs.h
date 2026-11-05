@@ -112,7 +112,13 @@ static FORCE_INLINE int64_t buildvfs_length(int fd)
 #endif
 }
 
+#ifdef __amigaos__
+// amiga/amiga_dir.c: libnix's chdir() also enters a file.
+extern "C" int amiga_chdir(const char *path);
+# define buildvfs_chdir(dir) amiga_chdir(dir)
+#else
 #define buildvfs_chdir(dir) chdir(dir)
+#endif
 #define buildvfs_mkdir(dir, x) Bmkdir(dir, x)
 #define buildvfs_getcwd(buf, size) getcwd((buf), (size))
 

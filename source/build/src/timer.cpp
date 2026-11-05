@@ -104,6 +104,21 @@ static FORCE_INLINE ATTRIBUTE((flatten)) uint64_t timerSampleRDTSC(void)
 #endif
 
 
+#ifdef __amigaos__
+// libnix has no clock_gettime(): the time comes from SDL's performance
+// counter (the E-clock) instead.
+static int amiga_gettime(int, timespec *ts)
+{
+    uint64_t const count = SDL_GetPerformanceCounter();
+    uint64_t const freq  = SDL_GetPerformanceFrequency();
+    ts->tv_sec  = (time_t)(count / freq);
+    ts->tv_nsec = (long)((count % freq) * 1000000000ULL / freq);
+    return 0;
+}
+# undef enet_gettime
+# define enet_gettime amiga_gettime
+#endif
+
 // returns ticks since epoch in the format and frequency specified
 template<typename T> T timerGetTicks(T freq)
 {

@@ -101,7 +101,12 @@ int32_t g_Shareware = 0;
 // This was 32 for a while, but I think lowering it to 24 will help things like the Dingoo.
 // Ideally, we would look at our memory usage on our most cramped platform and figure out
 // how much of that is needed for the underlying OS and things like SDL instead of guessing
-#ifndef GEKKO
+#if defined __amigaos__
+// The tile cache, taken whole at start-up: Duke 3D's art is about 15 MB,
+// and an Amiga has 32 to 128 MB for everything (-cachesize or CacheSize
+// in the cfg for more).
+int32_t MAXCACHE1DSIZE = (16*1024*1024);
+#elif !defined GEKKO
 int32_t MAXCACHE1DSIZE = (96*1024*1024);
 #else
 int32_t MAXCACHE1DSIZE = (8*1024*1024);

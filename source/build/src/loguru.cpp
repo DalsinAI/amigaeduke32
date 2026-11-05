@@ -2151,8 +2151,14 @@ namespace loguru
 		struct sigaction sig_action;
 		memset(&sig_action, 0, sizeof(sig_action));
 		sigemptyset(&sig_action.sa_mask);
+#ifdef __amigaos__
+		// libnix's struct sigaction has no sa_sigaction.
+		void (*plain_handler)(int) = &signal_handler;
+		sig_action.sa_handler = plain_handler;
+#else
 		sig_action.sa_flags |= SA_SIGINFO;
 		sig_action.sa_sigaction = &signal_handler;
+#endif
 
 		if (signal_options.sigabrt) {
 			CHECK_F(sigaction(SIGABRT, &sig_action, NULL) != -1, "Failed to install handler for SIGABRT");

@@ -1688,7 +1688,11 @@ struct XXH64_state_s {
 
 #ifndef XXH_NO_XXH3
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) /* >= C11 */
+#if defined(__amigaos__)
+/* The Amiga's hunk objects align to 8 bytes at most; the alignment is for
+ * SIMD loads, which the 68k has none of. */
+#  define XXH_ALIGN(n)      __attribute__ ((aligned((n) > 8 ? 8 : (n))))
+#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) /* >= C11 */
 #  define XXH_ALIGN(n)      _Alignas(n)
 #elif defined(__cplusplus) && (__cplusplus >= 201103L) /* >= C++11 */
 /* In C++ alignas() is a keyword */

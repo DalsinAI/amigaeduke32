@@ -87,3 +87,7 @@ project.xcworkspace/
 .DS_Store
 ._*
 /source/voidwrap/sdk/
+
+# The Amiga build (amiga/Makefile.amigaos)
+/build/
+/dist/

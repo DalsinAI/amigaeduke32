@@ -195,6 +195,11 @@ void CONFIG_SetDefaults(void)
 
     ud.setup.xdim = droidinfo.screen_width;
     ud.setup.ydim = droidinfo.screen_height;
+#elif defined __amigaos__
+    // The classic 320x200, full screen (the screen SDL opens is the
+    // nearest the Amiga has; the frame is scaled to it).
+    ud.setup.xdim = 320;
+    ud.setup.ydim = 200;
 #else
 # if defined RENDERTYPESDL && SDL_MAJOR_VERSION >= 2
     uint32_t inited = SDL_WasInit(SDL_INIT_VIDEO);
@@ -227,11 +232,16 @@ void CONFIG_SetDefaults(void)
     ud.config.MixRate = 44100;
 #elif defined __ANDROID__
     ud.config.MixRate = droidinfo.audio_sample_rate;
+#elif defined __amigaos__
+    ud.config.MixRate = 22050;  // the 68k mixes every voice itself
 #else
     ud.config.MixRate = 48000;
 #endif
 
-#if defined GEKKO || defined __OPENDINGUX__
+#if defined __amigaos__
+    ud.config.NumVoices = 16;
+    ud.camera_time = 11;
+#elif defined GEKKO || defined __OPENDINGUX__
     ud.config.NumVoices = 32;
     ud.camera_time = 11;
 #else
