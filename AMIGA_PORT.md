@@ -49,7 +49,8 @@ What it needs
 -------------
 
 - A 68040 or 68060 with an FPU (not an LC040 or EC040), AmigaOS 3.2.
-- OpenGPU's runtime: opengpu.library and LIBS:OpenGPU/SDL2.module.
+- GFOpenUp 0.8.18 or later (opengpu.library and LIBS:OpenGPU/SDL2.module).
+  With OpenGPU 0.6's SDL2.module the game stops after the skill screen.
 - 64 MB of Fast RAM is comfortable: the program is 2.9 MB with 12 MB of
   tables, and the tile cache takes 16 MB more at start-up (-cachesize or
   CacheSize in eduke32.cfg for another size).
@@ -182,6 +183,21 @@ Cut
 Known limits and 68k slowness
 -----------------------------
 
+- Lab (Instance-45, 6 November 2026, GFOpenUp 0.8.19 and SDL2.module from
+  gfopenrtg 29d32bf, shareware DUKE3D.GRP 1.3D): the 8-bit 640x400 full
+  screen with the OPL3 music on, the main menu, New Game, the episode and
+  skill screens, and E1L1 (Hollywood Holocaust) played: Duke walking and
+  turning on the roof. Quit Game goes through the shareware's order
+  screens back to the Shell. In a window too (ScreenMode = 0).
+- Earlier runs (5 November, OpenGPU 0.6's modules): the full screen
+  stayed grey (opengpu.library's planar conversion), and after the skill
+  screen the game never reached the level: SDL_SetThreadPriority raised
+  the game's task to 5 and the module's waits then starved every task at
+  0. Both are gone with GFOpenUp 0.8.18 and later (SDL2.module no longer
+  raises a task above 0; gfopenrtg 29d32bf), with no change to the game.
+- The window surface's texture (sdlayer.cpp) and amiga/amiga_screens.c
+  stay: the newer SDL2.module does not need them, but with them the game
+  still runs on the older one.
 - Speed. The renderer's fixed-point helpers (pragmas.h: mulscale,
   dmulscale, divscale) are 64-bit: mulscale is one MULS.L 32x32->64 on the
   68040, but the 68060 has no 64-bit MULS.L/DIVS.L and traps to
