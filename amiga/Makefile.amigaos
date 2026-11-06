@@ -111,6 +111,7 @@ ICONS   = $(wildcard amiga/icons/*.info)
 dist: $(BUILD)/$(PROG) AMIGA_PORT.md $(ICONS)
 	rm -rf $(OUT) $(DIST)/EDuke32.info
 	mkdir -p $(OUT)/GameData
+	echo "Put DUKE3D.GRP (and any add-on GRPs) here: see the ReadMe beside the program." > $(OUT)/GameData/ReadMe.txt
 	cp $(BUILD)/$(PROG) $(OUT)/$(PROG)
 	cp AMIGA_PORT.md $(OUT)/ReadMe
 	cp package/common/buildlic.txt $(OUT)/buildlic.txt
