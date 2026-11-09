@@ -86,7 +86,7 @@ decoder, libxmp-lite, miniz, lz4 and the OPL3 emulator. The flags are
 -noixemul -m68040 -m68881 -O2; CPU="-m68060 -m68881" makes a build for the
 68060 alone (see below). The output is build/amigaos/EDuke32, and 'make
 dist' makes dist/EDuke32 (the drawer above) and dist/EDuke32.info. The
-GlowIcons are made from EDuke32's own program icon by port_icons.py
+GlowIcons are made from our own art (amiga/icons/art/eduke32.svg) by port_icons.py
 (amiga/icons/icons.json says how). Never more than -j2 on a small machine:
 gameexec.cpp, gamedef.cpp and engine.cpp each take a good deal of memory.
 
