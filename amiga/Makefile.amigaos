@@ -114,6 +114,7 @@ dist: $(BUILD)/$(PROG) AMIGA_PORT.md $(ICONS)
 	echo "Put DUKE3D.GRP (and any add-on GRPs) here: see the ReadMe beside the program." > $(OUT)/GameData/ReadMe.txt
 	cp $(BUILD)/$(PROG) $(OUT)/$(PROG)
 	cp AMIGA_PORT.md $(OUT)/ReadMe
+	cp amiga/Controls $(OUT)/Controls
 	cp package/common/buildlic.txt $(OUT)/buildlic.txt
 	cp package/common/gpl-2.0.txt $(OUT)/gpl-2.0.txt
 	cp amiga/icons/EDuke32.info amiga/icons/ReadMe.info \
