@@ -7099,8 +7099,15 @@ MAIN_LOOP_RESTART:
     {
         if (gameHandleEvents() && quitevent)
         {
+#ifdef __amigaos__
+            /* Right Amiga + Q and the close gadget quit, as in every
+               AmiCradle game (upstream only opens the menu) */
+            quitevent = 0;
+            G_GameQuit();
+#else
             KB_KeyDown[sc_Escape] = 1;
             quitevent = 0;
+#endif
         }
 
         //if (g_restartFrameRoutine)
