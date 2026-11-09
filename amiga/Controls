@@ -1,0 +1,15 @@
+EDuke32
+
+W, S  forwards, backwards
+Cursor left, right  turn
+A, D  side-step
+Mouse  look and turn, left button  fire
+Right Ctrl  fire
+E  open doors, press switches
+Space  jump, Left Ctrl  crouch
+Left Shift  run
+1 to 0  weapons
+Return  use the item, [ and ]  choose it
+Tab  map
+Esc  menu (Options changes the keys)
+F1 help, F2 save, F3 load, F6 quick save, F9 quick load
