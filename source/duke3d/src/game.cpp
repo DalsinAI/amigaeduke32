@@ -7101,11 +7101,13 @@ MAIN_LOOP_RESTART:
         /* Right Amiga + Q and the close gadget quit, as in every
            AmiCradle game (upstream only opens the menu). quitevent is
            checked on its own: the key-up events after SDL_QUIT in the
-           same poll reset handleevents()' result to 0 */
+           same poll reset handleevents()' result to 0. g_quickExit
+           skips the shareware's order screens, which wait for a key */
         gameHandleEvents();
         if (quitevent)
         {
             quitevent = 0;
+            g_quickExit = 1;
             G_GameQuit();
         }
 #else
