@@ -249,6 +249,23 @@ void G_HandleSpecialKeys(void)
 #endif
 }
 
+#ifdef __amigaos__
+/* Right Amiga + Q and the close gadget quit, as in every AmiCradle game
+   (upstream only opens the menu). Called after the event pumps of the
+   main loop and the title's demo loop; quitevent is checked on its own,
+   because the key-up events after SDL_QUIT in the same poll reset
+   handleevents()' result to 0. g_quickExit skips the shareware's order
+   screens, which wait for a key (the menu's Quit still shows them). */
+void G_AmigaQuitCheck(void)
+{
+    if (!quitevent)
+        return;
+    quitevent = 0;
+    g_quickExit = 1;
+    G_GameQuit();
+}
+#endif
+
 void G_GameQuit(void)
 {
     if (numplayers < 2)
@@ -7098,18 +7115,8 @@ MAIN_LOOP_RESTART:
     do //main loop
     {
 #ifdef __amigaos__
-        /* Right Amiga + Q and the close gadget quit, as in every
-           AmiCradle game (upstream only opens the menu). quitevent is
-           checked on its own: the key-up events after SDL_QUIT in the
-           same poll reset handleevents()' result to 0. g_quickExit
-           skips the shareware's order screens, which wait for a key */
         gameHandleEvents();
-        if (quitevent)
-        {
-            quitevent = 0;
-            g_quickExit = 1;
-            G_GameQuit();
-        }
+        G_AmigaQuitCheck();
 #else
         if (gameHandleEvents() && quitevent)
         {

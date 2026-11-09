@@ -954,6 +954,9 @@ nextdemo_nomenu:
         // updating totalclock when profiling (both via sampletimer()):
         if (!Demo_IsProfiling())
             gameHandleEvents();
+#ifdef __amigaos__
+        G_AmigaQuitCheck();  /* the title menu runs in this loop */
+#endif
 
         if (g_player[myconnectindex].ps->gm == MODE_GAME)
         {
