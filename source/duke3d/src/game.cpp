@@ -7097,18 +7097,24 @@ MAIN_LOOP_RESTART:
 
     do //main loop
     {
-        if (gameHandleEvents() && quitevent)
-        {
 #ifdef __amigaos__
-            /* Right Amiga + Q and the close gadget quit, as in every
-               AmiCradle game (upstream only opens the menu) */
+        /* Right Amiga + Q and the close gadget quit, as in every
+           AmiCradle game (upstream only opens the menu). quitevent is
+           checked on its own: the key-up events after SDL_QUIT in the
+           same poll reset handleevents()' result to 0 */
+        gameHandleEvents();
+        if (quitevent)
+        {
             quitevent = 0;
             G_GameQuit();
+        }
 #else
+        if (gameHandleEvents() && quitevent)
+        {
             KB_KeyDown[sc_Escape] = 1;
             quitevent = 0;
-#endif
         }
+#endif
 
         //if (g_restartFrameRoutine)
         //{
